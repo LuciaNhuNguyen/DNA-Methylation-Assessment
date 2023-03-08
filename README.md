@@ -1,1 +1,2 @@
-# DNA-Methylation-Assessment
+# DNA METHYLATION ASSESSMENT 
+Here are all assignments of edX PH525.6x course:  "HarvardX Case Studies in Functional Genomics (edX PH525.6x): DNA Methylation". In this scenario, we will look at several fundamental stages in analyzing DNA methylation data, such as reading raw data, normalization, and identifying areas of differential methylation across numerous samples using open source tools such as R and Bioconductor. We'll show you how to start with raw data and work your way through the typical processing and normalization stages to the point where you may examine pertinent biological topics. During the case studies, we will utilize exploratory plots to acquire a basic picture of the data shape and experiment results.
