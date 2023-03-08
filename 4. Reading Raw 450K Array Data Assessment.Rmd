@@ -1,0 +1,182 @@
+---
+title: "Reading Raw 450K Array Data Assessment"
+author: "Quynh Nhu Nguyen"
+date: "March 4th 2023"
+output: html_document
+---
+### Question 1:
+
+For this assessment you will need to install the following packages:
+
+```{r}
+BiocManager::install(c("minfi",                       "IlluminaHumanMethylation450kmanifest",                       "IlluminaHumanMethylation450kanno.ilmn12.hg19"))
+```
+
+The first step is to determine the basename of the idat files you have just downloaded . Note that for each sample we have two files: one for red and green channels respectively. If you determine the path correctly and type this:
+
+```{r}
+path <- "/Users/lucia/OneDrive/Desktop/R/edX_DNA Methylation/rawdata-master/idats"
+list.files(path)
+```
+...you should see a list of .idat files and one targets.csv file
+
+Let's start by reading in the csv file which contains clinical information. This has one row for each sample and one of the columns includes the "basenames" for the files
+
+```{r}
+targets=read.csv(file.path(path,"targets.csv"),as.is=TRUE)
+names(targets)
+targets$Basename
+```
+How many cancer samples are included in this dataset?
+
+```{r}
+table(targets$Status)
+```
+
+### Question 2:
+
+To make this script work in any working directory we can edit that column to contain the absolute paths.
+
+```{r}
+targets$Basename <- file.path(path,targets$Basename)
+```
+Then we are ready to read in the raw data with the read.450k function
+
+```{r}
+library(minfi)
+rgset <- read.metharray(targets$Basename,verbose=TRUE)
+rownames(targets) <- sampleNames(rgset)
+targets <- as(targets, "DataFrame")
+pData(rgset) <- targets
+```
+
+We now have the raw data, red an green intensities which we have access too
+
+```{r}
+dim(getRed(rgset))
+dim(getGreen(rgset))
+```
+
+If you are not interested in developing preprocessing algorithms then you can use the built in preprocessing algorithm and go straight to object that give you access to methylation estimates
+
+```{r}
+mset = preprocessIllumina(rgset)
+```
+
+This performs the default preprocessing algorithm developed by Illumina. However, for this to be useful we want to have the locations of each CpG and to do that we need map the CpGs to genome. minfi keeps this information modular so that when the genome annotation gets updated one can easily change the mapping.
+
+```{r}
+library(minfi)
+mset = mapToGenome(mset)
+```
+
+Now we are ready to obtain the methylation values and CpG locations.
+
+```{r}
+dim(getBeta(mset,type="Illumina")) ##the argument type="Illumina" gives us default procedure
+head(granges(mset))
+```
+If we use the Illumina approach to estimating methylation values, what is the estimate of the CpG at location 153807318 on chr4 for sample "5775041068_R04C01"
+
+```{r}
+cpg<-GRanges(seqnames="chr4",ranges=153807318)
+index<-subjectHits(findOverlaps(cpg,granges(mset)))
+gene<-names(granges(mset)[index])
+getBeta(mset,type="Illumina")[gene,"5775041068_R04C01"]
+```
+
+```{r}
+# model answer
+i = which(seqnames(granges(mset))=="chr4" & start(granges(mset))==153807318)
+j = which(rownames(pData(mset))=="5775041068_R04C01")
+getBeta(mset,type="Illumina")[i,j]
+```
+
+### Question 3:
+
+Load the bumphunter package:
+
+```{r}
+library(bumphunter)
+```
+Note that mset as defined above of class:
+
+```{r}
+class(mset)
+```
+and bumphunter needs one of the following classes:
+
+```{r}
+showMethods("bumphunter")
+```
+
+Note that we need to convert mset to a "GenomicRatioSet" with
+
+```{r}
+grset = ratioConvert(mset,what="beta",type="Illumina")
+```
+
+Read the helpfile:
+
+```{r}
+help("bumphunter,GenomicRatioSet-method")
+```
+
+Which of the following would is the best way of finding DMRs between cancer and normal samples?
+
+Answer:
+
+```{r}
+X=model.matrix(~pData(grset)$Status) 
+res=bumphunter(grset,X,cutoff=0.1)
+```
+
+### Question 4: 
+
+Run bumphunter as determined in the previous assessment question.
+
+What is the "area" of the first DMR listed in the DMR table returned by bumphunter?  
+
+```{r}
+tab<-res$table
+head(tab)
+tab$area[1]
+```
+
+### Question 5:
+
+The default behavior for bumphunter is not to smooth the data. Here we will learn how to run bumphunter with smoothing. However to make the code run faster we will only run in on chr22. To do this we first subset grset:
+
+```{r}
+index= which(seqnames(grset)=="chr22")
+grset2 = grset[index,]
+```
+
+Now we run bumphunter without smoothing:
+
+```{r}
+library(bumphunter)
+X=model.matrix(~pData(grset2)$Status)
+res=bumphunter(grset2,X,cutoff=0.25)
+```
+
+To use smoothing we change the smooth argument to TRUE. For details on how to control how the smooth is done we refer you to the helpfile:
+
+```{r}
+?bumphunter
+```
+
+Now we run it with smoothing
+
+```{r}
+res2 = bumphunter(grset2,X,cutoff=0.25,smooth=TRUE)
+```
+
+```{r}
+tab<-res$table
+head(tab)
+nrow(tab)
+tab2<-res2$table
+head(tab2)
+nrow(tab2)
+```
